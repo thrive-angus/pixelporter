@@ -43,9 +43,9 @@ app.post('/generate-alt-text', upload.single('file'), async (req, res) => {
       return res.status(400).json({ error: 'No file provided' });
     }
 
-    const apiKey = req.headers['x-openai-key'];
+    const apiKey = req.headers['x-openai-key'] || process.env.OPENAI_API_KEY;
     if (!apiKey) {
-      return res.status(400).json({ error: 'Missing x-openai-key header' });
+      return res.status(400).json({ error: 'Missing OpenAI API key. Set OPENAI_API_KEY env var or pass x-openai-key header.' });
     }
 
     const base64 = req.file.buffer.toString('base64');

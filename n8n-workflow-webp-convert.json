@@ -92,15 +92,7 @@
             }
           ]
         },
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "x-openai-key",
-              "value": "={{ $credentials.httpHeaderAuth.value.split('Bearer ').pop() }}"
-            }
-          ]
-        },
+        "sendHeaders": false,
         "options": {}
       },
       "id": "a1b2c3d4-0006-4000-8000-000000000006",
