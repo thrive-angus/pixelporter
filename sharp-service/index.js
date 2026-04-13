@@ -99,7 +99,6 @@ app.post('/generate-alt-text', upload.single('file'), async (req, res) => {
       .replace(/-$/, '');
     const seoFilename = slug + ext;
     const fileBase64 = req.file.buffer.toString('base64');
-    const mimeType = req.file.mimetype || 'image/webp';
 
     res.json({ altText, seoFilename, fileBase64, mimeType });
   } catch (err) {
