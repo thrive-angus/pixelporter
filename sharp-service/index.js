@@ -86,7 +86,20 @@ app.post('/generate-alt-text', upload.single('file'), async (req, res) => {
     }
 
     const altText = data.choices[0].message.content.trim();
-    res.json({ altText, fileName: req.file.originalname || 'image' });
+
+    // Build SEO-friendly filename from alt text
+    const originalName = req.file.originalname || 'image.webp';
+    const ext = originalName.substring(originalName.lastIndexOf('.')) || '.webp';
+    const slug = altText
+      .toLowerCase()
+      .replace(/[^a-z0-9\s-]/g, '')
+      .replace(/\s+/g, '-')
+      .replace(/-+/g, '-')
+      .substring(0, 80)
+      .replace(/-$/, '');
+    const seoFileName = slug + ext;
+
+    res.json({ altText, fileName: seoFileName, originalFileName: originalName });
   } catch (err) {
     console.error('Alt text generation error:', err);
     res.status(500).json({ error: 'Alt text generation failed', message: err.message });
