@@ -1,0 +1,22 @@
+services:
+  sharp-service:
+    build:
+      context: ./sharp-service
+      dockerfile: Dockerfile
+    container_name: sharp-service
+    restart: unless-stopped
+    ports:
+      - "3100:3100"
+    networks:
+      - dokploy-network
+    environment:
+      - PORT=3100
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3100/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+networks:
+  dokploy-network:
+    external: true
