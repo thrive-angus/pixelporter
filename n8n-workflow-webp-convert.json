@@ -92,25 +92,60 @@
             }
           ]
         },
-        "sendHeaders": false,
-        "options": {
-          "response": {
-            "response": {
-              "responseFormat": "file",
-              "outputPropertyName": "file"
-            }
-          }
-        }
+        "options": {}
       },
       "id": "a1b2c3d4-0006-4000-8000-000000000006",
       "name": "Generate Alt Text",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1180, 300],
+      "position": [1180, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nfor (const item of items) {\n  const name = item.json.seoFilename || 'image.webp';\n  const mime = item.json.mimeType || (name.endsWith('.svg') ? 'image/svg+xml' : 'image/webp');\n  item.binary = {\n    file: {\n      data: item.json.fileBase64,\n      mimeType: mime,\n      fileName: name,\n    }\n  };\n  delete item.json.fileBase64;\n  delete item.json.mimeType;\n}\nreturn items;"
+      },
+      "id": "a1b2c3d4-0008-4000-8000-000000000008",
+      "name": "Rename File",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1420, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://dentistrozellesydney.com.au/wp-json/wp/v2/media",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "parameterType": "formBinaryData",
+              "name": "file",
+              "inputDataFieldName": "file"
+            },
+            {
+              "name": "alt_text",
+              "value": "={{ $json.altText }}"
+            },
+            {
+              "name": "title",
+              "value": "={{ $json.altText }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a1b2c3d4-0009-4000-8000-000000000009",
+      "name": "Upload to WordPress",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1660, 300],
       "credentials": {
-        "httpHeaderAuth": {
+        "httpBasicAuth": {
           "id": "",
-          "name": "openAI API Key - HTTP Node"
+          "name": "WordPress - Rozelle"
         }
       }
     }
@@ -150,6 +185,28 @@
         [
           {
             "node": "Generate Alt Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Alt Text": {
+      "main": [
+        [
+          {
+            "node": "Rename File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rename File": {
+      "main": [
+        [
+          {
+            "node": "Upload to WordPress",
             "type": "main",
             "index": 0
           }
