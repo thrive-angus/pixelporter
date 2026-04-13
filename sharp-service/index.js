@@ -99,7 +99,13 @@ app.post('/generate-alt-text', upload.single('file'), async (req, res) => {
       .replace(/-$/, '');
     const seoFileName = slug + ext;
 
-    res.json({ altText, fileName: seoFileName, originalFileName: originalName });
+    res.set({
+      'Content-Type': req.file.mimetype || 'image/webp',
+      'Content-Disposition': `attachment; filename="${seoFileName}"`,
+      'X-Alt-Text': encodeURIComponent(altText),
+      'X-Seo-Filename': seoFileName,
+    });
+    res.send(req.file.buffer);
   } catch (err) {
     console.error('Alt text generation error:', err);
     res.status(500).json({ error: 'Alt text generation failed', message: err.message });
