@@ -18,7 +18,10 @@ app.post('/convert', upload.single('file'), async (req, res) => {
       .toBuffer();
 
     const originalName = req.file.originalname || 'image.png';
-    const newName = originalName.replace(/\.(png|jpg|jpeg)$/i, '.webp');
+    const hasExtension = /\.(png|jpg|jpeg)$/i.test(originalName);
+    const newName = hasExtension
+      ? originalName.replace(/\.(png|jpg|jpeg)$/i, '.webp')
+      : originalName + '.webp';
 
     res.set({
       'Content-Type': 'image/webp',
