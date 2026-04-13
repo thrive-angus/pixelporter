@@ -76,32 +76,44 @@
       "typeVersion": 4.2,
       "position": [720, 420]
     },
-    {
-      "parameters": {},
-      "id": "a1b2c3d4-0004-4000-8000-000000000004",
-      "name": "SVG Passthrough",
-      "type": "n8n-nodes-base.noOp",
-      "typeVersion": 1,
-      "position": [720, 180]
-    },
+
     {
       "parameters": {
-        "mode": "chooseBranch",
-        "output": "empty"
+        "method": "POST",
+        "url": "http://sharp-service:3100/generate-alt-text",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "parameterType": "formBinaryData",
+              "name": "file",
+              "inputDataFieldName": "file"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-openai-key",
+              "value": "={{ $credentials.httpHeaderAuth.value.split('Bearer ').pop() }}"
+            }
+          ]
+        },
+        "options": {}
       },
-      "id": "a1b2c3d4-0005-4000-8000-000000000005",
-      "name": "Merge",
-      "type": "n8n-nodes-base.merge",
-      "typeVersion": 3,
-      "position": [960, 300]
-    },
-    {
-      "parameters": {},
       "id": "a1b2c3d4-0006-4000-8000-000000000006",
-      "name": "Next Step Placeholder",
-      "type": "n8n-nodes-base.noOp",
-      "typeVersion": 1,
-      "position": [1180, 300]
+      "name": "Generate Alt Text",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1180, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "",
+          "name": "openAI API Key - HTTP Node"
+        }
+      }
     }
   ],
   "connections": {
@@ -120,7 +132,7 @@
       "main": [
         [
           {
-            "node": "SVG Passthrough",
+            "node": "Generate Alt Text",
             "type": "main",
             "index": 0
           }
@@ -134,33 +146,11 @@
         ]
       ]
     },
-    "SVG Passthrough": {
-      "main": [
-        [
-          {
-            "node": "Merge",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
     "Convert to WebP": {
       "main": [
         [
           {
-            "node": "Merge",
-            "type": "main",
-            "index": 1
-          }
-        ]
-      ]
-    },
-    "Merge": {
-      "main": [
-        [
-          {
-            "node": "Next Step Placeholder",
+            "node": "Generate Alt Text",
             "type": "main",
             "index": 0
           }
