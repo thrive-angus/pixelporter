@@ -1,0 +1,178 @@
+{
+  "name": "PixelPorter - WebP Conversion Pipeline",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "pixelporter",
+        "options": {}
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000001",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 300],
+      "webhookId": "pixelporter"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "svg-check",
+              "leftValue": "={{ $binary.file.mimeType }}",
+              "rightValue": "image/svg+xml",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "a1b2c3d4-0002-4000-8000-000000000002",
+      "name": "Is SVG?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [480, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://sharp-service:3100/convert",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "parameterType": "formBinaryData",
+              "name": "file",
+              "inputDataFieldName": "file"
+            },
+            {
+              "name": "quality",
+              "value": "80"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "file"
+            }
+          }
+        }
+      },
+      "id": "a1b2c3d4-0003-4000-8000-000000000003",
+      "name": "Convert to WebP",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [720, 420]
+    },
+    {
+      "parameters": {},
+      "id": "a1b2c3d4-0004-4000-8000-000000000004",
+      "name": "SVG Passthrough",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [720, 180]
+    },
+    {
+      "parameters": {
+        "mode": "chooseBranch",
+        "output": "empty"
+      },
+      "id": "a1b2c3d4-0005-4000-8000-000000000005",
+      "name": "Merge",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [960, 300]
+    },
+    {
+      "parameters": {},
+      "id": "a1b2c3d4-0006-4000-8000-000000000006",
+      "name": "Next Step Placeholder",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [1180, 300]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Is SVG?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is SVG?": {
+      "main": [
+        [
+          {
+            "node": "SVG Passthrough",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Convert to WebP",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SVG Passthrough": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert to WebP": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Next Step Placeholder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 1
+}
