@@ -48,8 +48,16 @@ app.post('/generate-alt-text', upload.single('file'), async (req, res) => {
       return res.status(400).json({ error: 'Missing OpenAI API key. Set OPENAI_API_KEY env var or pass x-openai-key header.' });
     }
 
-    const base64 = req.file.buffer.toString('base64');
-    const mimeType = req.file.mimetype || 'image/webp';
+    // If SVG, convert to PNG for OpenAI vision (it doesn't support SVG)
+    let imageBuffer = req.file.buffer;
+    let imageMime = req.file.mimetype || 'image/webp';
+    if (imageMime === 'image/svg+xml') {
+      imageBuffer = await sharp(req.file.buffer).png().toBuffer();
+      imageMime = 'image/png';
+    }
+
+    const base64 = imageBuffer.toString('base64');
+    const mimeType = imageMime;
     const dataUrl = `data:${mimeType};base64,${base64}`;
 
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -99,8 +107,9 @@ app.post('/generate-alt-text', upload.single('file'), async (req, res) => {
       .replace(/-$/, '');
     const seoFilename = slug + ext;
     const fileBase64 = req.file.buffer.toString('base64');
+    const originalMimeType = req.file.mimetype || 'image/webp';
 
-    res.json({ altText, seoFilename, fileBase64, mimeType });
+    res.json({ altText, seoFilename, fileBase64, mimeType: originalMimeType });
   } catch (err) {
     console.error('Alt text generation error:', err);
     res.status(500).json({ error: 'Alt text generation failed', message: err.message });
