@@ -85,7 +85,7 @@ app.post('/generate-alt-text', upload.single('file'), async (req, res) => {
       return res.status(response.status).json({ error: 'OpenAI error', details: data });
     }
 
-    const altText = data.choices[0].message.content.trim();
+    const altText = data.choices[0].message.content.trim().replace(/\.+$/, '');
 
     // Build SEO-friendly filename from alt text
     const originalName = req.file.originalname || 'image.webp';
