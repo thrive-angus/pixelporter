@@ -5,7 +5,9 @@
       "parameters": {
         "httpMethod": "POST",
         "path": "pixelporter",
-        "options": {}
+        "options": {
+          "responseMode": "responseNode"
+        }
       },
       "id": "a1b2c3d4-0001-4000-8000-000000000001",
       "name": "Webhook",
@@ -92,6 +94,15 @@
             }
           ]
         },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Custom-Name",
+              "value": "={{ $('Webhook').first().json.customName }}"
+            }
+          ]
+        },
         "options": {}
       },
       "id": "a1b2c3d4-0006-4000-8000-000000000006",
@@ -102,7 +113,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const items = $input.all();\nfor (const item of items) {\n  const name = item.json.seoFilename || 'image.webp';\n  const mime = item.json.mimeType || (name.endsWith('.svg') ? 'image/svg+xml' : 'image/webp');\n  item.binary = {\n    file: {\n      data: item.json.fileBase64,\n      mimeType: mime,\n      fileName: name,\n    }\n  };\n  delete item.json.fileBase64;\n  delete item.json.mimeType;\n}\nreturn items;"
+        "jsCode": "const items = $input.all();\nfor (const item of items) {\n  const name = item.json.seoFilename || 'image.webp';\n  const mime = item.json.mimeType || (name.endsWith('.svg') ? 'image/svg+xml' : 'image/webp');\n  item.binary = {\n    file: {\n      data: item.json.fileBase64,\n      mimeType: mime,\n      fileName: name,\n    }\n  };\n}\nreturn items;"
       },
       "id": "a1b2c3d4-0008-4000-8000-000000000008",
       "name": "Rename File",
@@ -141,13 +152,24 @@
       "name": "Upload to WordPress",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1660, 300],
+      "position": [1660, 200],
       "credentials": {
         "httpBasicAuth": {
           "id": "",
           "name": "WordPress - Rozelle"
         }
       }
+    },
+    {
+      "parameters": {
+        "respondWith": "allItems",
+        "options": {}
+      },
+      "id": "a1b2c3d4-0010-4000-8000-000000000010",
+      "name": "Return File",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1660, 420]
     }
   ],
   "connections": {
@@ -207,6 +229,11 @@
         [
           {
             "node": "Upload to WordPress",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Return File",
             "type": "main",
             "index": 0
           }

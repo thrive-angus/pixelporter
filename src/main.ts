@@ -48,7 +48,7 @@ export default function () {
 
       if (node && typeof node.exportAsync === 'function') {
         try {
-          const format = item.name.toLowerCase().endsWith('.svg') ? 'SVG' : 'PNG'
+          const format = item.format === 'SVG' ? 'SVG' : 'PNG'
           const buffer = await node.exportAsync({
             format: format,
             constraint: { type: 'SCALE', value: 1 }
@@ -57,7 +57,8 @@ export default function () {
           assets.push({
             name: item.name,
             buffer: buffer,
-            format: format
+            format: format,
+            customName: item.customName || ''
           })
         } catch (e) {
           console.error(`Export failed for ${nodeId}:`, e)

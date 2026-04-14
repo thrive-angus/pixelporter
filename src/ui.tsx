@@ -6,13 +6,21 @@ import { useState, useEffect } from 'preact/hooks'
 import axios from 'axios'
 
 function Plugin() {
-  const [webhookUrl, setWebhookUrl] = useState('')
+  const [webhookUrl, setWebhookUrl] = useState(() => {
+    try { return localStorage.getItem('pixelporter_webhookUrl') || '' } catch { return '' }
+  })
   const [folderPath, setFolderPath] = useState('')
-  const [items, setItems] = useState<Array<{id: string, name: string, sizeLabel: string}>>([])
+  const [items, setItems] = useState<Array<{id: string, name: string, sizeLabel: string, format: string, customName: string}>>([])
   const [currentPreview, setCurrentPreview] = useState<{id: string, name: string, base64: string, size: number} | null>(null)
   const [editName, setEditName] = useState('')
+  const [exportFormat, setExportFormat] = useState<'IMG' | 'SVG'>('IMG')
   const [loading, setLoading] = useState(false)
   const [notification, setNotification] = useState('')
+
+  const updateWebhookUrl = (val: string) => {
+    setWebhookUrl(val);
+    try { localStorage.setItem('pixelporter_webhookUrl', val) } catch {}
+  };
 
   const isConfigComplete = webhookUrl.trim() !== '' && folderPath.trim() !== '';
 
@@ -65,8 +73,29 @@ function Plugin() {
         const blob = new Blob([asset.buffer], { type: asset.format === 'SVG' ? 'image/svg+xml' : 'image/png' });
         formData.append('file', blob, asset.name);
         formData.append('folderPath', msg.folderPath);
+        if (asset.customName) {
+          formData.append('customName', asset.customName);
+        }
 
-        await axios.post(msg.webhookUrl, formData);
+        const response = await axios.post(msg.webhookUrl, formData);
+
+        // Trigger file download from JSON response
+        const resData = Array.isArray(response.data) ? response.data[0] : response.data;
+        const { seoFilename, fileBase64, mimeType } = resData;
+        if (fileBase64 && seoFilename) {
+          const byteChars = atob(fileBase64);
+          const byteArray = new Uint8Array(byteChars.length);
+          for (let i = 0; i < byteChars.length; i++) {
+            byteArray[i] = byteChars.charCodeAt(i);
+          }
+          const downloadBlob = new Blob([byteArray], { type: mimeType || 'image/webp' });
+          const url = URL.createObjectURL(downloadBlob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = seoFilename;
+          a.click();
+          URL.revokeObjectURL(url);
+        }
       }
       setLoading(false);
       setItems([]);
@@ -83,10 +112,15 @@ function Plugin() {
 
   const addToQueue = () => {
     if (currentPreview) {
+      const ext = exportFormat === 'SVG' ? '.svg' : '';
+      const name = editName + ext;
+      const nameWasEdited = editName !== currentPreview.name;
       setItems(prev => [...prev, { 
         id: `${currentPreview.id}-${Date.now()}`, 
-        name: editName, 
-        sizeLabel: formatSize(currentPreview.size) 
+        name: name, 
+        sizeLabel: formatSize(currentPreview.size),
+        format: exportFormat,
+        customName: nameWasEdited ? editName : ''
       }]);
     }
   };
@@ -94,7 +128,7 @@ function Plugin() {
   return (
     <Container space="medium">
       <VerticalSpace space="medium" />
-      <Textbox value={webhookUrl} onInput={(e) => setWebhookUrl(e.currentTarget.value)} placeholder="Webhook URL" />
+      <Textbox value={webhookUrl} onInput={(e) => updateWebhookUrl(e.currentTarget.value)} placeholder="Webhook URL" />
       <VerticalSpace space="small" />
       <Textbox value={folderPath} onInput={(e) => setFolderPath(e.currentTarget.value)} placeholder="G-Drive Path" />
       
@@ -111,6 +145,28 @@ function Plugin() {
       <VerticalSpace space="small" />
       <Textbox value={editName} onInput={(e) => setEditName(e.currentTarget.value)} placeholder="Asset Name" />
       <VerticalSpace space="small" />
+      <div style={{ display: 'flex', gap: '4px' }}>
+        {(['IMG', 'SVG'] as const).map(fmt => (
+          <span
+            key={fmt}
+            onClick={() => setExportFormat(fmt)}
+            style={{
+              flex: 1,
+              textAlign: 'center',
+              padding: '6px 0',
+              fontSize: '11px',
+              fontWeight: 'bold',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              backgroundColor: exportFormat === fmt ? '#18A0FB' : '#F0F0F0',
+              color: exportFormat === fmt ? '#FFF' : '#333',
+            }}
+          >
+            {fmt}
+          </span>
+        ))}
+      </div>
+      <VerticalSpace space="small" />
       <Button fullWidth onClick={addToQueue} disabled={!currentPreview || !isConfigComplete} secondary>
         Add to Queue
       </Button>
@@ -126,7 +182,10 @@ function Plugin() {
       <VerticalSpace space="small" />
       {items.map(item => (
         <div key={item.id} style={{ padding: '8px', borderBottom: '1px solid #EEE', fontSize: '11px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <span>{item.name} ({item.sizeLabel})</span>
+          <span>
+            <span style={{ display: 'inline-block', padding: '1px 4px', borderRadius: '3px', fontSize: '9px', fontWeight: 'bold', marginRight: '4px', backgroundColor: item.format === 'SVG' ? '#E8D5F5' : '#D5E8F5', color: item.format === 'SVG' ? '#7B2D8E' : '#2D5F8E' }}>{item.format}</span>
+            {item.name} ({item.sizeLabel})
+          </span>
           <span onClick={() => removeFromQueue(item.id)} style={{ cursor: 'pointer', color: '#999', fontSize: '13px', marginLeft: '8px', lineHeight: '1' }} title="Remove">✕</span>
         </div>
       ))}

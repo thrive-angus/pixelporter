@@ -43,57 +43,68 @@ app.post('/generate-alt-text', upload.single('file'), async (req, res) => {
       return res.status(400).json({ error: 'No file provided' });
     }
 
-    const apiKey = req.headers['x-openai-key'] || process.env.OPENAI_API_KEY;
-    if (!apiKey) {
-      return res.status(400).json({ error: 'Missing OpenAI API key. Set OPENAI_API_KEY env var or pass x-openai-key header.' });
+    const customName = req.headers['x-custom-name'];
+    let altText;
+
+    if (customName && customName !== 'undefined' && customName.trim() !== '') {
+      // Use custom name as alt text — clean it up
+      altText = customName
+        .replace(/[-_]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+    } else {
+      // No custom name — use OpenAI vision to describe the image
+      const apiKey = req.headers['x-openai-key'] || process.env.OPENAI_API_KEY;
+      if (!apiKey) {
+        return res.status(400).json({ error: 'Missing OpenAI API key. Set OPENAI_API_KEY env var or pass x-openai-key header.' });
+      }
+
+      // If SVG, convert to PNG for OpenAI vision (it doesn't support SVG)
+      let imageBuffer = req.file.buffer;
+      let imageMime = req.file.mimetype || 'image/webp';
+      if (imageMime === 'image/svg+xml') {
+        imageBuffer = await sharp(req.file.buffer).png().toBuffer();
+        imageMime = 'image/png';
+      }
+
+      const base64 = imageBuffer.toString('base64');
+      const dataUrl = `data:${imageMime};base64,${base64}`;
+
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o',
+          messages: [
+            {
+              role: 'system',
+              content: 'You are an SEO specialist. Generate a concise, descriptive alt text for the given image. The alt text should be under 125 characters, descriptive of the visual content, and optimized for SEO. Return ONLY the alt text, nothing else.',
+            },
+            {
+              role: 'user',
+              content: [
+                {
+                  type: 'image_url',
+                  image_url: { url: dataUrl, detail: 'low' },
+                },
+              ],
+            },
+          ],
+          max_tokens: 100,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        return res.status(response.status).json({ error: 'OpenAI error', details: data });
+      }
+
+      altText = data.choices[0].message.content.trim().replace(/\.+$/, '');
     }
-
-    // If SVG, convert to PNG for OpenAI vision (it doesn't support SVG)
-    let imageBuffer = req.file.buffer;
-    let imageMime = req.file.mimetype || 'image/webp';
-    if (imageMime === 'image/svg+xml') {
-      imageBuffer = await sharp(req.file.buffer).png().toBuffer();
-      imageMime = 'image/png';
-    }
-
-    const base64 = imageBuffer.toString('base64');
-    const mimeType = imageMime;
-    const dataUrl = `data:${mimeType};base64,${base64}`;
-
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o',
-        messages: [
-          {
-            role: 'system',
-            content: 'You are an SEO specialist. Generate a concise, descriptive alt text for the given image. The alt text should be under 125 characters, descriptive of the visual content, and optimized for SEO. Return ONLY the alt text, nothing else.',
-          },
-          {
-            role: 'user',
-            content: [
-              {
-                type: 'image_url',
-                image_url: { url: dataUrl, detail: 'low' },
-              },
-            ],
-          },
-        ],
-        max_tokens: 100,
-      }),
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      return res.status(response.status).json({ error: 'OpenAI error', details: data });
-    }
-
-    const altText = data.choices[0].message.content.trim().replace(/\.+$/, '');
 
     // Build SEO-friendly filename from alt text
     const originalName = req.file.originalname || 'image.webp';
