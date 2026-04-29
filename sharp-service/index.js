@@ -3,8 +3,17 @@ const multer = require('multer');
 const sharp = require('sharp');
 
 const app = express();
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
 
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 50 * 1024 * 1024 }
+});
+
+/**
+ * ----------------------------------------
+ * IMAGE CONVERT + RESIZE ENDPOINT
+ * ----------------------------------------
+ */
 app.post('/convert', upload.single('file'), async (req, res) => {
   try {
     if (!req.file) {
@@ -12,31 +21,58 @@ app.post('/convert', upload.single('file'), async (req, res) => {
     }
 
     const quality = parseInt(req.body.quality) || 80;
+    const width = parseInt(req.body.width) || null;
+    const height = parseInt(req.body.height) || null;
 
-    const webpBuffer = await sharp(req.file.buffer)
+    let pipeline = sharp(req.file.buffer);
+
+    // Resize if provided
+    if (width || height) {
+      pipeline = pipeline.resize({
+        width: width || undefined,
+        height: height || undefined,
+        fit: 'inside',
+        withoutEnlargement: true
+      });
+    }
+
+    const webpBuffer = await pipeline
       .webp({ quality })
       .toBuffer();
 
     const originalName = req.file.originalname || 'image.png';
-    const hasExtension = /\.(png|jpg|jpeg)$/i.test(originalName);
-    const newName = hasExtension
-      ? originalName.replace(/\.(png|jpg|jpeg)$/i, '.webp')
-      : originalName + '.webp';
+    const newName = originalName.replace(/\.(png|jpg|jpeg|webp)$/i, '') + '.webp';
 
     res.set({
       'Content-Type': 'image/webp',
       'Content-Disposition': `attachment; filename="${newName}"`,
       'X-Original-Name': newName,
     });
+
     res.send(webpBuffer);
+
   } catch (err) {
     console.error('Conversion error:', err);
     res.status(500).json({ error: 'Conversion failed', message: err.message });
   }
 });
 
-app.get('/health', (req, res) => res.json({ status: 'ok' }));
 
+/**
+ * ----------------------------------------
+ * HEALTH CHECK
+ * ----------------------------------------
+ */
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok' });
+});
+
+
+/**
+ * ----------------------------------------
+ * ALT TEXT GENERATION
+ * ----------------------------------------
+ */
 app.post('/generate-alt-text', upload.single('file'), async (req, res) => {
   try {
     if (!req.file) {
@@ -46,22 +82,35 @@ app.post('/generate-alt-text', upload.single('file'), async (req, res) => {
     const customName = req.headers['x-custom-name'];
     let altText;
 
+    /**
+     * ----------------------------------------
+     * USE CUSTOM NAME IF PROVIDED
+     * ----------------------------------------
+     */
     if (customName && customName !== 'undefined' && customName.trim() !== '') {
-      // Use custom name as alt text — clean it up
       altText = customName
         .replace(/[-_]+/g, ' ')
         .replace(/\s+/g, ' ')
         .trim();
     } else {
-      // No custom name — use OpenAI vision to describe the image
+
+      /**
+       * ----------------------------------------
+       * OPENAI ALT TEXT GENERATION
+       * ----------------------------------------
+       */
       const apiKey = req.headers['x-openai-key'] || process.env.OPENAI_API_KEY;
+
       if (!apiKey) {
-        return res.status(400).json({ error: 'Missing OpenAI API key. Set OPENAI_API_KEY env var or pass x-openai-key header.' });
+        return res.status(400).json({
+          error: 'Missing OpenAI API key. Set OPENAI_API_KEY or pass x-openai-key header.'
+        });
       }
 
-      // If SVG, convert to PNG for OpenAI vision (it doesn't support SVG)
       let imageBuffer = req.file.buffer;
       let imageMime = req.file.mimetype || 'image/webp';
+
+      // Convert SVG → PNG (required for vision models)
       if (imageMime === 'image/svg+xml') {
         imageBuffer = await sharp(req.file.buffer).png().toBuffer();
         imageMime = 'image/png';
@@ -77,38 +126,49 @@ app.post('/generate-alt-text', upload.single('file'), async (req, res) => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: 'gpt-4o',
+          model: 'gpt-4o-mini',
           messages: [
             {
               role: 'system',
-              content: 'You are an SEO specialist. Generate a concise, descriptive alt text for the given image. The alt text should be under 125 characters, descriptive of the visual content, and optimized for SEO. Return ONLY the alt text, nothing else.',
+              content: 'Write one concise SEO-friendly alt text under 20 words. Describe only what is visible. Do not include "image of". Return only the alt text.'
             },
             {
               role: 'user',
               content: [
                 {
                   type: 'image_url',
-                  image_url: { url: dataUrl, detail: 'low' },
-                },
-              ],
-            },
+                  image_url: {
+                    url: dataUrl,
+                    detail: 'low'
+                  }
+                }
+              ]
+            }
           ],
-          max_tokens: 100,
+          max_tokens: 40
         }),
       });
 
       const data = await response.json();
 
       if (!response.ok) {
-        return res.status(response.status).json({ error: 'OpenAI error', details: data });
+        return res.status(response.status).json({
+          error: 'OpenAI error',
+          details: data
+        });
       }
 
       altText = data.choices[0].message.content.trim().replace(/\.+$/, '');
     }
 
-    // Build SEO-friendly filename from alt text
+    /**
+     * ----------------------------------------
+     * GENERATE SEO FILENAME
+     * ----------------------------------------
+     */
     const originalName = req.file.originalname || 'image.webp';
     const ext = originalName.substring(originalName.lastIndexOf('.')) || '.webp';
+
     const slug = altText
       .toLowerCase()
       .replace(/[^a-z0-9\s-]/g, '')
@@ -116,16 +176,37 @@ app.post('/generate-alt-text', upload.single('file'), async (req, res) => {
       .replace(/-+/g, '-')
       .substring(0, 80)
       .replace(/-$/, '');
-    const seoFilename = slug + ext;
-    const fileBase64 = req.file.buffer.toString('base64');
-    const originalMimeType = req.file.mimetype || 'image/webp';
 
-    res.json({ altText, seoFilename, fileBase64, mimeType: originalMimeType });
+    const seoFilename = slug + ext;
+
+    /**
+     * ----------------------------------------
+     * RESPONSE
+     * ----------------------------------------
+     */
+    res.json({
+      altText,
+      seoFilename,
+      fileBase64: req.file.buffer.toString('base64'),
+      mimeType: req.file.mimetype || 'image/webp'
+    });
+
   } catch (err) {
     console.error('Alt text generation error:', err);
-    res.status(500).json({ error: 'Alt text generation failed', message: err.message });
+    res.status(500).json({
+      error: 'Alt text generation failed',
+      message: err.message
+    });
   }
 });
 
+
+/**
+ * ----------------------------------------
+ * START SERVER
+ * ----------------------------------------
+ */
 const PORT = process.env.PORT || 3100;
-app.listen(PORT, () => console.log(`Sharp service running on port ${PORT}`));
+app.listen(PORT, () => {
+  console.log(`Sharp service running on port ${PORT}`);
+});
