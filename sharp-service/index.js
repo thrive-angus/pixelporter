@@ -20,7 +20,7 @@ app.post('/convert', upload.single('file'), async (req, res) => {
       return res.status(400).json({ error: 'No file provided' });
     }
 
-    const quality = parseInt(req.body.quality) || 80;
+    const quality = parseInt(req.body.quality) || 90;
     const width = parseInt(req.body.width) || null;
     const height = parseInt(req.body.height) || null;
 
