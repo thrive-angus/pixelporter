@@ -6,23 +6,21 @@ import { useState, useEffect } from 'preact/hooks'
 import axios from 'axios'
 
 function Plugin() {
-  const [webhookUrl, setWebhookUrl] = useState(() => {
-    try { return localStorage.getItem('pixelporter_webhookUrl') || '' } catch { return '' }
-  })
-  const [folderPath, setFolderPath] = useState('')
+  const [webhookUrl, setWebhookUrl] = useState('')
   const [items, setItems] = useState<Array<{id: string, name: string, sizeLabel: string, format: string, customName: string}>>([])
   const [currentPreview, setCurrentPreview] = useState<{id: string, name: string, base64: string, size: number} | null>(null)
   const [editName, setEditName] = useState('')
+  const [customAltTitle, setCustomAltTitle] = useState('')
   const [exportFormat, setExportFormat] = useState<'IMG' | 'SVG'>('IMG')
   const [loading, setLoading] = useState(false)
   const [notification, setNotification] = useState('')
 
   const updateWebhookUrl = (val: string) => {
     setWebhookUrl(val);
-    try { localStorage.setItem('pixelporter_webhookUrl', val) } catch {}
+    emit('SAVE_WEBHOOK_URL', { url: val });
   };
 
-  const isConfigComplete = webhookUrl.trim() !== '' && folderPath.trim() !== '';
+  const isConfigComplete = webhookUrl.trim() !== '';
 
   const formatSize = (bytes: number) => {
     if (bytes === 0) return '0 Bytes';
@@ -33,6 +31,10 @@ function Plugin() {
   };
 
   useEffect(() => {
+    const unsubscribeWebhook = on('LOAD_WEBHOOK_URL', (data: any) => {
+      if (data.url) setWebhookUrl(data.url);
+    });
+
     const unsubscribePreview = on('SELECTION_PREVIEW', (data: any) => {
       const base64 = btoa(
         new Uint8Array(data.previewBytes).reduce((acc: string, byte: number) => acc + String.fromCharCode(byte), '')
@@ -45,9 +47,7 @@ function Plugin() {
         size: data.fileSize
       });
       setEditName(data.name);
-      if (data.suggestedPath) {
-        setFolderPath(data.suggestedPath);
-      }
+      setCustomAltTitle('');
     });
 
     const unsubscribeUpload = on('SEND_ALL_TO_N8N', (data: any) => {
@@ -55,6 +55,7 @@ function Plugin() {
     });
 
     return () => {
+      unsubscribeWebhook();
       unsubscribePreview();
       unsubscribeUpload();
     };
@@ -72,7 +73,6 @@ function Plugin() {
         const formData = new FormData();
         const blob = new Blob([asset.buffer], { type: asset.format === 'SVG' ? 'image/svg+xml' : 'image/png' });
         formData.append('file', blob, asset.name);
-        formData.append('folderPath', msg.folderPath);
         if (asset.customName) {
           formData.append('customName', asset.customName);
         }
@@ -114,14 +114,14 @@ function Plugin() {
     if (currentPreview) {
       const ext = exportFormat === 'SVG' ? '.svg' : '';
       const name = editName + ext;
-      const nameWasEdited = editName !== currentPreview.name;
       setItems(prev => [...prev, { 
         id: `${currentPreview.id}-${Date.now()}`, 
         name: name, 
         sizeLabel: formatSize(currentPreview.size),
         format: exportFormat,
-        customName: nameWasEdited ? editName : ''
+        customName: customAltTitle.trim()
       }]);
+      setCustomAltTitle('');
     }
   };
 
@@ -129,8 +129,6 @@ function Plugin() {
     <Container space="medium">
       <VerticalSpace space="medium" />
       <Textbox value={webhookUrl} onInput={(e) => updateWebhookUrl(e.currentTarget.value)} placeholder="Webhook URL" />
-      <VerticalSpace space="small" />
-      <Textbox value={folderPath} onInput={(e) => setFolderPath(e.currentTarget.value)} placeholder="G-Drive Path" />
       
       <VerticalSpace space="medium" /><Divider /><VerticalSpace space="medium" />
 
@@ -144,6 +142,16 @@ function Plugin() {
 
       <VerticalSpace space="small" />
       <Textbox value={editName} onInput={(e) => setEditName(e.currentTarget.value)} placeholder="Asset Name" />
+      {currentPreview ? (
+        <div>
+          <VerticalSpace space="small" />
+          <Textbox
+            value={customAltTitle}
+            onInput={(e) => setCustomAltTitle(e.currentTarget.value)}
+            placeholder="Custom alt/title (optional)"
+          />
+        </div>
+      ) : null}
       <VerticalSpace space="small" />
       <div style={{ display: 'flex', gap: '4px' }}>
         {(['IMG', 'SVG'] as const).map(fmt => (
@@ -184,6 +192,9 @@ function Plugin() {
         <div key={item.id} style={{ padding: '8px', borderBottom: '1px solid #EEE', fontSize: '11px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <span>
             <span style={{ display: 'inline-block', padding: '1px 4px', borderRadius: '3px', fontSize: '9px', fontWeight: 'bold', marginRight: '4px', backgroundColor: item.format === 'SVG' ? '#E8D5F5' : '#D5E8F5', color: item.format === 'SVG' ? '#7B2D8E' : '#2D5F8E' }}>{item.format}</span>
+            {item.customName ? (
+              <span style={{ display: 'inline-block', padding: '1px 4px', borderRadius: '3px', fontSize: '9px', fontWeight: 'bold', marginRight: '4px', backgroundColor: '#DCFCE7', color: '#166534' }}>ALT</span>
+            ) : null}
             {item.name} ({item.sizeLabel})
           </span>
           <span onClick={() => removeFromQueue(item.id)} style={{ cursor: 'pointer', color: '#999', fontSize: '13px', marginLeft: '8px', lineHeight: '1' }} title="Remove">✕</span>
@@ -193,7 +204,7 @@ function Plugin() {
       <VerticalSpace space="large" />
       <Button 
         fullWidth 
-        onClick={() => emit('SEND_TO_PIPELINE', { webhookUrl, folderPath, items })} 
+        onClick={() => emit('SEND_TO_PIPELINE', { webhookUrl, items })} 
         loading={loading} 
         disabled={items.length === 0}
       >

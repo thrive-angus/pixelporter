@@ -1,20 +1,20 @@
 {
-  "name": "PixelPorter - WebP Conversion Pipeline",
+  "name": "PixelPorter Pipeline v2",
   "nodes": [
     {
       "parameters": {
         "httpMethod": "POST",
-        "path": "pixelporter",
+        "path": "pixelporter-v2",
         "options": {
           "responseMode": "responseNode"
         }
       },
-      "id": "a1b2c3d4-0001-4000-8000-000000000001",
+      "id": "b2c3d4e5-0001-4000-8000-000000000001",
       "name": "Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
       "position": [250, 300],
-      "webhookId": "pixelporter"
+      "webhookId": "pixelporter-v2"
     },
     {
       "parameters": {
@@ -38,7 +38,7 @@
           "combinator": "and"
         }
       },
-      "id": "a1b2c3d4-0002-4000-8000-000000000002",
+      "id": "b2c3d4e5-0002-4000-8000-000000000002",
       "name": "Is SVG?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
@@ -72,13 +72,12 @@
           }
         }
       },
-      "id": "a1b2c3d4-0003-4000-8000-000000000003",
+      "id": "b2c3d4e5-0003-4000-8000-000000000003",
       "name": "Convert to WebP",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [720, 420]
     },
-
     {
       "parameters": {
         "method": "POST",
@@ -105,21 +104,21 @@
         },
         "options": {}
       },
-      "id": "a1b2c3d4-0006-4000-8000-000000000006",
+      "id": "b2c3d4e5-0006-4000-8000-000000000006",
       "name": "Generate Alt Text",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1180, 300]
+      "position": [960, 300]
     },
     {
       "parameters": {
         "jsCode": "const items = $input.all();\nfor (const item of items) {\n  const name = item.json.seoFilename || 'image.webp';\n  const mime = item.json.mimeType || (name.endsWith('.svg') ? 'image/svg+xml' : 'image/webp');\n  item.binary = {\n    file: {\n      data: item.json.fileBase64,\n      mimeType: mime,\n      fileName: name,\n    }\n  };\n}\nreturn items;"
       },
-      "id": "a1b2c3d4-0008-4000-8000-000000000008",
+      "id": "b2c3d4e5-0008-4000-8000-000000000008",
       "name": "Rename File",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1420, 300]
+      "position": [1200, 300]
     },
     {
       "parameters": {
@@ -148,11 +147,11 @@
         },
         "options": {}
       },
-      "id": "a1b2c3d4-0009-4000-8000-000000000009",
+      "id": "b2c3d4e5-0009-4000-8000-000000000009",
       "name": "Upload to WordPress",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1660, 200],
+      "position": [1440, 200],
       "credentials": {
         "httpBasicAuth": {
           "id": "",
@@ -165,11 +164,11 @@
         "respondWith": "allItems",
         "options": {}
       },
-      "id": "a1b2c3d4-0010-4000-8000-000000000010",
+      "id": "b2c3d4e5-0010-4000-8000-000000000010",
       "name": "Return File",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [1660, 420]
+      "position": [1440, 420]
     }
   ],
   "connections": {

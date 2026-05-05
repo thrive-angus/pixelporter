@@ -1,15 +1,17 @@
 import { on, showUI, emit } from '@create-figma-plugin/utilities'
 
-function getTopmostFrame(node: SceneNode): SceneNode {
-  let current: SceneNode = node
-  while (current.parent && current.parent.type !== 'PAGE') {
-    current = current.parent as SceneNode
-  }
-  return current
-}
-
 export default function () {
   showUI({ width: 320, height: 580 })
+
+  // Load saved webhook URL and send to UI
+  figma.clientStorage.getAsync('webhookUrl').then((url) => {
+    if (url) emit('LOAD_WEBHOOK_URL', { url })
+  })
+
+  // Save webhook URL when UI sends it
+  on('SAVE_WEBHOOK_URL', (data: { url: string }) => {
+    figma.clientStorage.setAsync('webhookUrl', data.url)
+  })
 
   figma.on('selectionchange', async () => {
     const selection = figma.currentPage.selection
@@ -21,16 +23,11 @@ export default function () {
           constraint: { type: 'SCALE', value: 1 }
         })
 
-        const topmostFrame = getTopmostFrame(node)
-        const projectName = figma.root.name
-        const suggestedPath = `${projectName} - ${topmostFrame.name}`
-
         emit('SELECTION_PREVIEW', {
           nodeId: node.id,
           name: node.name,
           previewBytes: Array.from(previewBytes),
-          fileSize: previewBytes.length,
-          suggestedPath: suggestedPath
+          fileSize: previewBytes.length
         })
       } catch (err) {
         console.error("Preview Export Failed:", err)
@@ -38,7 +35,7 @@ export default function () {
     }
   })
 
-  on('SEND_TO_PIPELINE', async (data: { webhookUrl: string, folderPath: string, items: any[] }) => {
+  on('SEND_TO_PIPELINE', async (data: { webhookUrl: string, items: any[] }) => {
     figma.notify('Exporting assets...', { timeout: 2000 })
     const assets = []
 
@@ -69,7 +66,6 @@ export default function () {
     if (assets.length > 0) {
       emit('SEND_ALL_TO_N8N', {
         webhookUrl: data.webhookUrl,
-        folderPath: data.folderPath,
         assets: assets
       })
     } else {
