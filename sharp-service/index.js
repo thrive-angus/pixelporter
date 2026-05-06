@@ -45,17 +45,10 @@ app.post('/generate-alt-text', upload.single('file'), async (req, res) => {
 
     const customNameHeader = req.headers['x-custom-name'];
     const customName = typeof customNameHeader === 'string'
-      ? customNameHeader
-          .replace(/[-_]+/g, ' ')
-          .replace(/\s+/g, ' ')
-          .trim()
+      ? customNameHeader.trim()
       : '';
-    const apiKey = req.headers['x-openai-key'] || process.env.OPENAI_API_KEY;
-    if (!apiKey) {
-      return res.status(400).json({ error: 'Missing OpenAI API key. Set OPENAI_API_KEY env var or pass x-openai-key header.' });
-    }
 
-    // If SVG, convert to PNG for OpenAI vision (it doesn't support SVG)
+    // If SVG, convert to PNG so n8n OpenAI node can process it (SVG not supported by vision)
     let imageBuffer = req.file.buffer;
     let imageMime = req.file.mimetype || 'image/webp';
     if (imageMime === 'image/svg+xml') {
@@ -63,70 +56,18 @@ app.post('/generate-alt-text', upload.single('file'), async (req, res) => {
       imageMime = 'image/png';
     }
 
-    const base64 = imageBuffer.toString('base64');
-    const dataUrl = `data:${imageMime};base64,${base64}`;
-
-    const guidanceText = customName
-      ? `Use this optional user context as guidance (do not copy verbatim unless it matches the image): ${customName}`
-      : 'No custom context provided. Base the alt text only on what is visually present in the image.';
-
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o',
-        messages: [
-          {
-            role: 'system',
-            content: 'You are an SEO specialist. Generate a concise, descriptive alt text for the given image. Keep alt text under 125 characters, accurate to visual content, and return ONLY the alt text.',
-          },
-          {
-            role: 'user',
-            content: [
-              {
-                type: 'text',
-                text: guidanceText,
-              },
-              {
-                type: 'image_url',
-                image_url: { url: dataUrl, detail: 'low' },
-              },
-            ],
-          },
-        ],
-        max_tokens: 100,
-      }),
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      return res.status(response.status).json({ error: 'OpenAI error', details: data });
-    }
-
-    const altText = data.choices[0].message.content.trim().replace(/\.+$/, '');
-
-    // Build SEO-friendly filename from alt text
+    const fileBase64 = imageBuffer.toString('base64');
     const originalName = req.file.originalname || 'image.webp';
-    const ext = originalName.substring(originalName.lastIndexOf('.')) || '.webp';
-    const slug = altText
-      .toLowerCase()
-      .replace(/[^a-z0-9\s-]/g, '')
-      .replace(/\s+/g, '-')
-      .replace(/-+/g, '-')
-      .substring(0, 80)
-      .replace(/-$/, '');
-    const seoFilename = slug + ext;
-    const fileBase64 = req.file.buffer.toString('base64');
-    const originalMimeType = req.file.mimetype || 'image/webp';
 
-    res.json({ altText, seoFilename, fileBase64, mimeType: originalMimeType });
+    res.json({
+      customName,
+      fileBase64,
+      mimeType: imageMime,
+      originalName,
+    });
   } catch (err) {
-    console.error('Alt text generation error:', err);
-    res.status(500).json({ error: 'Alt text generation failed', message: err.message });
+    console.error('Prepare file error:', err);
+    res.status(500).json({ error: 'File preparation failed', message: err.message });
   }
 });
 

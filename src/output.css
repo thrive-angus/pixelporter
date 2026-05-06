@@ -161,6 +161,9 @@
   }
 }
 @layer utilities {
+  .visible {
+    visibility: visible;
+  }
   .start {
     inset-inline-start: var(--spacing);
   }
